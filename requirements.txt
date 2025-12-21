@@ -1,0 +1,19 @@
+# --- Resume Parsing & NLP ---
+pymupdf
+spacy
+
+# --- ADD THIS FIX ---
+tf-keras
+
+# --- Embeddings & Vector Search ---
+sentence-transformers
+faiss-cpu
+
+# --- AI Orchestration & Google Integration ---
+langchain
+langchain-community
+langchain-google-genai
+
+# --- Utilities ---
+python-dotenv
+numpy
