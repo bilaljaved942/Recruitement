@@ -70,8 +70,9 @@ if __name__ == "__main__":
     job_info = "Looking for a QA Engineer with experience in testing of applications."
     
     # Process local file
-    sample_text = pipeline.extract_text("C:\\Users\\hp\\Documents\\Recruitment\\CVs\\resume1.pdf")
+    sample_text = pipeline.extract_text("C:\\Users\\hp\\Documents\\Recruitment\\CV_documents\\resume1.pdf")
     pipeline.process_and_index("Candidate_01", sample_text)
+    print(pipeline.stored_resumes)
     
     # Generate Cloud AI Report
     report = pipeline.generate_analysis(sample_text, job_info)
