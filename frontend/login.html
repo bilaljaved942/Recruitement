@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Login to RecruitAI - AI-Powered Recruitment Platform">
+    <title>Login - RecruitAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+
+<body>
+    <div class="page-wrapper">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="container navbar-content">
+                <a href="index.html" class="navbar-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                    RecruitAI
+                </a>
+                <ul class="navbar-nav" id="navbar-nav"></ul>
+                <div class="navbar-user" id="navbar-user"></div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content flex items-center">
+            <div class="auth-container">
+                <div class="auth-card glass animate-fade-in">
+                    <div class="auth-header">
+                        <h2 class="auth-title">Welcome Back</h2>
+                        <p class="auth-subtitle">Login to your account</p>
+                    </div>
+
+                    <form id="login-form" onsubmit="handleLogin(event)">
+                        <div id="form-error" class="alert alert-error" style="display: none;"></div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="email">Email Address</label>
+                            <input type="email" id="email" class="form-input" placeholder="you@example.com" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="password">Password</label>
+                            <input type="password" id="password" class="form-input" placeholder="Enter your password"
+                                required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+                    </form>
+
+                    <div class="auth-footer">
+                        <p>Don't have an account? <a href="register.html">Create one</a></p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        // Redirect if already logged in
+        redirectIfLoggedIn();
+    </script>
+</body>
+
+</html>

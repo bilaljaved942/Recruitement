@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="My Applications - RecruitAI">
+    <title>My Applications - RecruitAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+
+<body>
+    <div class="page-wrapper">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="container navbar-content">
+                <a href="index.html" class="navbar-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                    RecruitAI
+                </a>
+                <ul class="navbar-nav" id="navbar-nav"></ul>
+                <div class="navbar-user" id="navbar-user"></div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                <div class="dashboard-header">
+                    <div>
+                        <h1 class="dashboard-title">My Applications</h1>
+                        <p class="text-secondary">Track your job applications and AI feedback</p>
+                    </div>
+                    <a href="jobs.html" class="btn btn-primary">
+                        Browse Jobs
+                    </a>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats-grid mb-xl">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-total">-</div>
+                        <div class="stat-label">Total Applications</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-pending">-</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-shortlisted">-</div>
+                        <div class="stat-label">Shortlisted</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-avg-score">-</div>
+                        <div class="stat-label">Avg AI Score</div>
+                    </div>
+                </div>
+
+                <!-- Applications -->
+                <h2 class="mb-lg">Your Applications</h2>
+                <div id="applications-container">
+                    <!-- Applications loaded dynamically -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        async function loadApplications() {
+            if (!requireAuth() || !requireRole('applicant')) return;
+
+            const container = document.getElementById('applications-container');
+            showLoading(container);
+
+            try {
+                const applications = await getMyApplications();
+
+                // Update stats
+                document.getElementById('stat-total').textContent = applications.length;
+                document.getElementById('stat-pending').textContent = applications.filter(a => a.status === 'pending').length;
+                document.getElementById('stat-shortlisted').textContent = applications.filter(a => a.status === 'shortlisted').length;
+
+                const avgScore = applications.length > 0
+                    ? Math.round(applications.reduce((sum, a) => sum + (a.ai_score || 0), 0) / applications.length)
+                    : 0;
+                document.getElementById('stat-avg-score').textContent = avgScore;
+
+                if (applications.length === 0) {
+                    showEmptyState(container, 'No Applications Yet', 'Start applying to jobs to track your progress here.',
+                        '<a href="jobs.html" class="btn btn-primary">Browse Jobs</a>');
+                    return;
+                }
+
+                container.innerHTML = applications.map(app => `
+                    <div class="card mb-lg animate-fade-in">
+                        <div class="flex justify-between items-start mb-md">
+                            <div>
+                                <h3 style="margin-bottom: 0.25rem;">${app.job_title || 'Job'}</h3>
+                                <p class="text-muted mb-sm">Applied ${formatDate(app.created_at)}</p>
+                            </div>
+                            <span class="badge ${getStatusBadgeClass(app.status)}">${app.status}</span>
+                        </div>
+
+                        <div class="ai-analysis">
+                            <div class="ai-score-container">
+                                ${createScoreRing(app.ai_score || 0, 100)}
+                                <div>
+                                    <h4 style="margin-bottom: 0.5rem;">AI Match Score</h4>
+                                    <p style="margin-bottom: 0;" class="text-secondary">
+                                        ${app.ai_score >= 80 ? 'Excellent match!' :
+                        app.ai_score >= 60 ? 'Good match' :
+                            app.ai_score >= 40 ? 'Partial match' : 'Low match'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="ai-summary">
+                                <h5 class="mb-sm">Summary</h5>
+                                <p style="margin-bottom: 0;">${app.ai_summary || 'No summary available'}</p>
+                            </div>
+
+                            ${app.ai_gaps ? `
+                                <div>
+                                    <h5 class="ai-gaps-title">Areas to Improve</h5>
+                                    <ul class="ai-gaps-list">
+                                        ${JSON.parse(app.ai_gaps).map(gap => `<li>${gap}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="flex gap-md mt-lg">
+                            <a href="${app.resume_url}" target="_blank" class="btn btn-outline btn-sm">
+                                View Submitted Resume
+                            </a>
+                            <a href="job-details.html?id=${app.job_id}" class="btn btn-secondary btn-sm">
+                                View Job Details
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                showError(container, error.message);
+            }
+        }
+
+        // Load applications on page load
+        document.addEventListener('DOMContentLoaded', loadApplications);
+    </script>
+</body>
+
+</html>

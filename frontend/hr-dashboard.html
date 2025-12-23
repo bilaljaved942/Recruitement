@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="HR Dashboard - RecruitAI">
+    <title>HR Dashboard - RecruitAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+
+<body>
+    <div class="page-wrapper">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="container navbar-content">
+                <a href="index.html" class="navbar-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                    RecruitAI
+                </a>
+                <ul class="navbar-nav" id="navbar-nav"></ul>
+                <div class="navbar-user" id="navbar-user"></div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                <div class="dashboard-header">
+                    <div>
+                        <h1 class="dashboard-title">HR Dashboard</h1>
+                        <p class="text-secondary">Manage your job postings and applicants</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openJobModal()">
+                        + Post New Job
+                    </button>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats-grid mb-xl" id="stats-container">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-jobs">-</div>
+                        <div class="stat-label">Active Jobs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-applications">-</div>
+                        <div class="stat-label">Total Applications</div>
+                    </div>
+                </div>
+
+                <!-- My Jobs -->
+                <h2 class="mb-lg">My Job Postings</h2>
+                <div id="jobs-container">
+                    <!-- Jobs loaded dynamically -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Job Modal -->
+    <div class="modal-overlay" id="job-modal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 id="modal-title">Post New Job</h3>
+                <button class="modal-close" onclick="closeJobModal()">&times;</button>
+            </div>
+            <form id="job-form" onsubmit="handleJobSubmit(event)">
+                <div id="job-error" class="alert alert-error" style="display: none;"></div>
+
+                <div class="form-group">
+                    <label class="form-label" for="job-title">Job Title</label>
+                    <input type="text" id="job-title" class="form-input" placeholder="e.g., Senior Software Engineer"
+                        required>
+                </div>
+
+                <div class="grid grid-2">
+                    <div class="form-group">
+                        <label class="form-label" for="job-location">Location</label>
+                        <input type="text" id="job-location" class="form-input" placeholder="e.g., Remote, New York">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="job-salary">Salary Range</label>
+                        <input type="text" id="job-salary" class="form-input" placeholder="e.g., $80k - $120k">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="job-description">Description</label>
+                    <textarea id="job-description" class="form-textarea" rows="4"
+                        placeholder="Describe the role and responsibilities..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="job-requirements">Requirements</label>
+                    <textarea id="job-requirements" class="form-textarea" rows="4"
+                        placeholder="List required skills and qualifications..." required></textarea>
+                </div>
+
+                <div class="flex gap-md">
+                    <button type="button" class="btn btn-secondary" onclick="closeJobModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="job-submit-btn">Post Job</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Applications Modal -->
+    <div class="modal-overlay" id="applications-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 id="applications-modal-title">Applications</h3>
+                <button class="modal-close" onclick="closeApplicationsModal()">&times;</button>
+            </div>
+            <div id="applications-container">
+                <!-- Applications loaded dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        let editingJobId = null;
+        let totalApplications = 0;
+
+        async function loadDashboard() {
+            if (!requireAuth() || !requireRole('hr')) return;
+
+            const container = document.getElementById('jobs-container');
+            showLoading(container);
+
+            try {
+                const jobs = await getMyPostings();
+
+                // Update stats
+                document.getElementById('stat-jobs').textContent = jobs.filter(j => j.status === 'active').length;
+
+                if (jobs.length === 0) {
+                    showEmptyState(container, 'No Jobs Posted', 'Create your first job posting to start receiving applications.',
+                        '<button class="btn btn-primary" onclick="openJobModal()">Post New Job</button>');
+                    document.getElementById('stat-applications').textContent = '0';
+                    return;
+                }
+
+                // Load application counts for each job
+                let totalApps = 0;
+                const jobsWithApps = await Promise.all(jobs.map(async job => {
+                    try {
+                        const apps = await getApplicationsForJob(job.id);
+                        totalApps += apps.length;
+                        return { ...job, applicationCount: apps.length };
+                    } catch {
+                        return { ...job, applicationCount: 0 };
+                    }
+                }));
+
+                document.getElementById('stat-applications').textContent = totalApps;
+
+                container.innerHTML = `
+                    <div class="grid grid-2">
+                        ${jobsWithApps.map(job => `
+                            <div class="job-card">
+                                <div class="job-card-header">
+                                    <div>
+                                        <h3 class="job-card-title">${job.title}</h3>
+                                        <p class="job-card-company">${formatDate(job.created_at)}</p>
+                                    </div>
+                                    <span class="badge ${getStatusBadgeClass(job.status)}">${job.status}</span>
+                                </div>
+                                <div class="job-card-meta">
+                                    ${job.location ? `<span class="job-card-meta-item">📍 ${job.location}</span>` : ''}
+                                    <span class="job-card-meta-item">👥 ${job.applicationCount} applications</span>
+                                </div>
+                                <div class="flex gap-sm mt-md">
+                                    <button class="btn btn-primary btn-sm" onclick="viewApplications(${job.id}, '${job.title}')">
+                                        View Applications
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm" onclick="editJob(${job.id})">
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" onclick="confirmDeleteJob(${job.id})">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                showError(container, error.message);
+            }
+        }
+
+        function openJobModal() {
+            editingJobId = null;
+            document.getElementById('modal-title').textContent = 'Post New Job';
+            document.getElementById('job-form').reset();
+            document.getElementById('job-submit-btn').textContent = 'Post Job';
+            document.getElementById('job-modal').classList.add('active');
+        }
+
+        function closeJobModal() {
+            document.getElementById('job-modal').classList.remove('active');
+            document.getElementById('job-error').style.display = 'none';
+        }
+
+        async function editJob(jobId) {
+            try {
+                const job = await getJob(jobId);
+                editingJobId = jobId;
+
+                document.getElementById('modal-title').textContent = 'Edit Job';
+                document.getElementById('job-title').value = job.title;
+                document.getElementById('job-location').value = job.location || '';
+                document.getElementById('job-salary').value = job.salary_range || '';
+                document.getElementById('job-description').value = job.description;
+                document.getElementById('job-requirements').value = job.requirements;
+                document.getElementById('job-submit-btn').textContent = 'Update Job';
+
+                document.getElementById('job-modal').classList.add('active');
+            } catch (error) {
+                alert('Error loading job: ' + error.message);
+            }
+        }
+
+        async function handleJobSubmit(event) {
+            event.preventDefault();
+
+            const errorDiv = document.getElementById('job-error');
+            const submitBtn = document.getElementById('job-submit-btn');
+
+            const jobData = {
+                title: document.getElementById('job-title').value,
+                description: document.getElementById('job-description').value,
+                requirements: document.getElementById('job-requirements').value,
+                location: document.getElementById('job-location').value || null,
+                salary_range: document.getElementById('job-salary').value || null
+            };
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner spinner-sm"></span>';
+
+                if (editingJobId) {
+                    await updateJob(editingJobId, jobData);
+                } else {
+                    await createJob(jobData);
+                }
+
+                closeJobModal();
+                loadDashboard();
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = editingJobId ? 'Update Job' : 'Post Job';
+            }
+        }
+
+        async function confirmDeleteJob(jobId) {
+            if (confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
+                try {
+                    await deleteJob(jobId);
+                    loadDashboard();
+                } catch (error) {
+                    alert('Error deleting job: ' + error.message);
+                }
+            }
+        }
+
+        async function viewApplications(jobId, jobTitle) {
+            document.getElementById('applications-modal-title').textContent = `Applications for ${jobTitle}`;
+            const container = document.getElementById('applications-container');
+            document.getElementById('applications-modal').classList.add('active');
+
+            showLoading(container);
+
+            try {
+                const applications = await getApplicationsForJob(jobId);
+
+                if (applications.length === 0) {
+                    container.innerHTML = '<p class="text-center text-muted">No applications yet.</p>';
+                    return;
+                }
+
+                container.innerHTML = applications.map(app => `
+                    <div class="application-card mb-md">
+                        <div class="application-score">
+                            ${createScoreRing(app.ai_score || 0)}
+                        </div>
+                        <div class="application-info">
+                            <h4>${app.applicant_name}</h4>
+                            <p>${app.applicant_email}</p>
+                            <p class="text-muted">Applied ${formatDate(app.created_at)}</p>
+                        </div>
+                        <div>
+                            <span class="badge ${getStatusBadgeClass(app.status)} mb-sm">${app.status}</span>
+                            <div class="flex gap-sm flex-wrap">
+                                <a href="${app.resume_url}" target="_blank" class="btn btn-outline btn-sm">View Resume</a>
+                                <select class="form-select" style="width: auto; padding: 0.25rem 0.5rem;" 
+                                    onchange="updateStatus(${app.id}, this.value)">
+                                    <option value="pending" ${app.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                    <option value="reviewed" ${app.status === 'reviewed' ? 'selected' : ''}>Reviewed</option>
+                                    <option value="shortlisted" ${app.status === 'shortlisted' ? 'selected' : ''}>Shortlisted</option>
+                                    <option value="rejected" ${app.status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                                    <option value="hired" ${app.status === 'hired' ? 'selected' : ''}>Hired</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-analysis mb-lg">
+                        <div class="ai-analysis-header">
+                            <div class="ai-analysis-icon">🤖</div>
+                            <h4 class="ai-analysis-title">AI Analysis</h4>
+                        </div>
+                        <p>${app.ai_summary || 'No summary available'}</p>
+                        ${app.ai_gaps ? `
+                            <h5 class="ai-gaps-title mt-md">Skill Gaps</h5>
+                            <ul class="ai-gaps-list">
+                                ${JSON.parse(app.ai_gaps).map(gap => `<li>${gap}</li>`).join('')}
+                            </ul>
+                        ` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                showError(container, error.message);
+            }
+        }
+
+        function closeApplicationsModal() {
+            document.getElementById('applications-modal').classList.remove('active');
+        }
+
+        async function updateStatus(applicationId, status) {
+            try {
+                await updateApplicationStatus(applicationId, status);
+            } catch (error) {
+                alert('Error updating status: ' + error.message);
+            }
+        }
+
+        // Load dashboard on page load
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+</body>
+
+</html>
