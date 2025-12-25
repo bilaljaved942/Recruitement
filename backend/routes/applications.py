@@ -8,10 +8,17 @@ from ..database import get_db
 from ..models.user import User
 from ..models.job import Job
 from ..models.application import Application, ApplicationStatus
-from ..schemas.application import ApplicationResponse, ApplicationStatusUpdate
+from ..schemas.application import (
+    ApplicationResponse, 
+    ApplicationStatusUpdate,
+    ShortlistRequest,
+    ShortlistResponse,
+    ShortlistedApplicant
+)
 from ..auth.dependencies import get_current_user, require_role
 from ..services.storage import storage_service
 from ..services.resume_analyzer import extract_text_from_bytes, analyze_resume
+from ..services.email_service import email_service
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -241,4 +248,127 @@ async def get_application(
         job_title=job.title if job else None,
         applicant_name=applicant.full_name if applicant else None,
         applicant_email=applicant.email if applicant else None
+    )
+
+
+@router.post("/job/{job_id}/shortlist-and-notify", response_model=ShortlistResponse)
+async def shortlist_and_notify(
+    job_id: int,
+    request: ShortlistRequest,
+    current_user: User = Depends(require_role("hr")),
+    db: Session = Depends(get_db)
+):
+    """
+    Shortlist top N applicants by AI score and send interview notifications.
+    
+    - Selects top N applicants based on threshold
+    - Updates their status to "shortlisted"
+    - Sends interview invitation emails to selected applicants
+    - Sends summary email to HR
+    """
+    # Validate threshold
+    if request.threshold <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Threshold must be greater than 0"
+        )
+    
+    # Check if job belongs to HR
+    job = db.query(Job).filter(Job.id == job_id, Job.hr_id == current_user.id).first()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found or access denied"
+        )
+    
+    # Get all applications for this job, sorted by AI score
+    applications = db.query(Application).filter(
+        Application.job_id == job_id
+    ).order_by(Application.ai_score.desc()).all()
+    
+    total_applicants = len(applications)
+    
+    if total_applicants == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No applications found for this job"
+        )
+    
+    # Select top N applicants (or all if threshold > total)
+    threshold = min(request.threshold, total_applicants)
+    selected_applications = applications[:threshold]
+    
+    # Check if email is configured
+    if not email_service.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email not configured. Please set SMTP_EMAIL and SMTP_PASSWORD in .env file"
+        )
+    
+    # Process selected applicants
+    selected_applicants = []
+    emails_sent = True
+    
+    for app in selected_applications:
+        applicant = db.query(User).filter(User.id == app.applicant_id).first()
+        if not applicant:
+            continue
+        
+        # Update status to shortlisted
+        app.status = ApplicationStatus.SHORTLISTED
+        
+        # Build applicant info
+        applicant_info = ShortlistedApplicant(
+            id=app.id,
+            name=applicant.full_name,
+            email=applicant.email,
+            score=app.ai_score or 0,
+            resume_url=app.resume_url
+        )
+        selected_applicants.append(applicant_info)
+        
+        # Send interview invitation email
+        try:
+            email_service.send_interview_invitation(
+                applicant_email=applicant.email,
+                applicant_name=applicant.full_name,
+                job_title=job.title
+            )
+        except Exception as e:
+            print(f"Failed to send email to {applicant.email}: {str(e)}")
+            emails_sent = False
+    
+    # Commit status updates
+    db.commit()
+    
+    # Send summary email to HR
+    hr_email_sent = True
+    try:
+        email_service.send_hr_summary(
+            hr_email=current_user.email,
+            hr_name=current_user.full_name,
+            job_title=job.title,
+            selected_applicants=[
+                {
+                    "name": a.name,
+                    "email": a.email,
+                    "score": a.score,
+                    "resume_url": a.resume_url
+                }
+                for a in selected_applicants
+            ],
+            total_applicants=total_applicants
+        )
+    except Exception as e:
+        print(f"Failed to send HR summary email: {str(e)}")
+        hr_email_sent = False
+    
+    return ShortlistResponse(
+        success=True,
+        message=f"Successfully shortlisted {len(selected_applicants)} applicants",
+        total_applicants=total_applicants,
+        shortlisted_count=len(selected_applicants),
+        selected_applicants=selected_applicants,
+        emails_sent=emails_sent,
+        hr_email_sent=hr_email_sent
     )

@@ -31,3 +31,35 @@ class AIAnalysisResponse(BaseModel):
     score: int
     summary: str
     gaps: list[str]
+
+
+class ShortlistRequest(BaseModel):
+    """Request to shortlist top N applicants for a job."""
+    threshold: int  # Number of applicants to shortlist
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "threshold": 10
+            }
+        }
+
+
+class ShortlistedApplicant(BaseModel):
+    """Info about a shortlisted applicant."""
+    id: int
+    name: str
+    email: str
+    score: int
+    resume_url: Optional[str]
+
+
+class ShortlistResponse(BaseModel):
+    """Response after shortlisting applicants."""
+    success: bool
+    message: str
+    total_applicants: int
+    shortlisted_count: int
+    selected_applicants: list[ShortlistedApplicant]
+    emails_sent: bool
+    hr_email_sent: bool

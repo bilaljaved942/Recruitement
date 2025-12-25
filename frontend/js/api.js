@@ -189,6 +189,13 @@ async function updateApplicationStatus(applicationId, status) {
     });
 }
 
+async function shortlistAndNotify(jobId, threshold) {
+    return apiRequest(`/applications/job/${jobId}/shortlist-and-notify`, {
+        method: 'POST',
+        body: JSON.stringify({ threshold })
+    });
+}
+
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================

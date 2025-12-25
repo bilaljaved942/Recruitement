@@ -117,6 +117,28 @@
                 <h3 id="applications-modal-title">Applications</h3>
                 <button class="modal-close" onclick="closeApplicationsModal()">&times;</button>
             </div>
+            
+            <!-- Shortlist Controls -->
+            <div id="shortlist-controls" style="display: none; background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <div style="color: white; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 5px 0;">📧 Shortlist & Send Interview Invites</h4>
+                    <p style="margin: 0; opacity: 0.9; font-size: 14px;">Select top candidates by AI score and automatically send interview invitation emails</p>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px; background: white; padding: 8px 12px; border-radius: 8px;">
+                        <label for="threshold-input" style="color: #4f46e5; font-weight: 600; white-space: nowrap;">Select top</label>
+                        <input type="number" id="threshold-input" min="1" value="5" 
+                            style="width: 60px; padding: 8px; border: 2px solid #e0e7ff; border-radius: 6px; font-size: 16px; font-weight: bold; text-align: center;">
+                        <span style="color: #4f46e5; font-weight: 600;">applicants</span>
+                    </div>
+                    <button id="shortlist-btn" class="btn" onclick="handleShortlist()" 
+                        style="background: white; color: #4f46e5; font-weight: 600; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">
+                        🚀 Shortlist & Send Emails
+                    </button>
+                </div>
+                <div id="shortlist-feedback" style="margin-top: 15px; display: none;"></div>
+            </div>
+            
             <div id="applications-container">
                 <!-- Applications loaded dynamically -->
             </div>
@@ -128,6 +150,7 @@
     <script>
         let editingJobId = null;
         let totalApplications = 0;
+        let currentViewingJobId = null;
 
         async function loadDashboard() {
             if (!requireAuth() || !requireRole('hr')) return;
@@ -275,9 +298,15 @@
         }
 
         async function viewApplications(jobId, jobTitle) {
+            currentViewingJobId = jobId;
             document.getElementById('applications-modal-title').textContent = `Applications for ${jobTitle}`;
             const container = document.getElementById('applications-container');
+            const shortlistControls = document.getElementById('shortlist-controls');
+            const shortlistFeedback = document.getElementById('shortlist-feedback');
+            
             document.getElementById('applications-modal').classList.add('active');
+            shortlistControls.style.display = 'none';
+            shortlistFeedback.style.display = 'none';
 
             showLoading(container);
 
@@ -288,6 +317,11 @@
                     container.innerHTML = '<p class="text-center text-muted">No applications yet.</p>';
                     return;
                 }
+                
+                // Show shortlist controls if there are applications
+                shortlistControls.style.display = 'block';
+                document.getElementById('threshold-input').max = applications.length;
+                document.getElementById('threshold-input').value = Math.min(5, applications.length);
 
                 container.innerHTML = applications.map(app => `
                     <div class="application-card mb-md">
@@ -335,6 +369,51 @@
 
         function closeApplicationsModal() {
             document.getElementById('applications-modal').classList.remove('active');
+            currentViewingJobId = null;
+        }
+        
+        async function handleShortlist() {
+            const threshold = parseInt(document.getElementById('threshold-input').value);
+            const shortlistBtn = document.getElementById('shortlist-btn');
+            const feedback = document.getElementById('shortlist-feedback');
+            
+            if (!threshold || threshold <= 0) {
+                feedback.innerHTML = '<div style="background: #fef2f2; color: #dc2626; padding: 12px; border-radius: 8px;">⚠️ Please enter a valid number greater than 0</div>';
+                feedback.style.display = 'block';
+                return;
+            }
+            
+            shortlistBtn.disabled = true;
+            shortlistBtn.innerHTML = '<span class="spinner spinner-sm"></span> Processing...';
+            feedback.innerHTML = '<div style="background: #f0f9ff; color: #0369a1; padding: 12px; border-radius: 8px;">📧 Sending interview invitations... This may take a moment.</div>';
+            feedback.style.display = 'block';
+            
+            try {
+                const result = await shortlistAndNotify(currentViewingJobId, threshold);
+                
+                let statusHtml = `
+                    <div style="background: #f0fdf4; color: #166534; padding: 15px; border-radius: 8px;">
+                        <h4 style="margin: 0 0 10px 0;">✅ ${result.message}</h4>
+                        <p style="margin: 0;"><strong>${result.shortlisted_count}</strong> out of <strong>${result.total_applicants}</strong> applicants selected</p>
+                        <p style="margin: 5px 0 0 0; font-size: 14px;">
+                            📧 Applicant emails: ${result.emails_sent ? '✅ Sent' : '⚠️ Some failed'} | 
+                            📊 HR summary: ${result.hr_email_sent ? '✅ Sent to your email' : '⚠️ Failed'}
+                        </p>
+                    </div>
+                `;
+                feedback.innerHTML = statusHtml;
+                
+                // Refresh the applications list to show updated statuses
+                setTimeout(() => {
+                    viewApplications(currentViewingJobId, document.getElementById('applications-modal-title').textContent.replace('Applications for ', ''));
+                }, 2000);
+                
+            } catch (error) {
+                feedback.innerHTML = `<div style="background: #fef2f2; color: #dc2626; padding: 12px; border-radius: 8px;">❌ Error: ${error.message}</div>`;
+            } finally {
+                shortlistBtn.disabled = false;
+                shortlistBtn.innerHTML = '🚀 Shortlist & Send Emails';
+            }
         }
 
         async function updateStatus(applicationId, status) {

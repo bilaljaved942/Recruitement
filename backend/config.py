@@ -22,5 +22,11 @@ class Settings:
     
     # Google AI (Fallback)
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    
+    # Email Configuration (Gmail SMTP - Free)
+    SMTP_EMAIL: str = os.getenv("SMTP_EMAIL", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")  # Gmail App Password
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
 
 settings = Settings()
