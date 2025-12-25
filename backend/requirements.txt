@@ -23,10 +23,11 @@ sentence-transformers
 faiss-cpu
 tf-keras
 
-# --- AI Orchestration & Google Integration ---
+# --- AI Orchestration & LLM Integration ---
 langchain
 langchain-community
 langchain-google-genai
+langchain-groq
 
 # --- Utilities ---
 python-dotenv

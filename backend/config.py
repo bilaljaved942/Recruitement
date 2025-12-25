@@ -17,7 +17,10 @@ class Settings:
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     SUPABASE_BUCKET: str = "resumes"
     
-    # Google AI
+    # Groq AI (Free tier - recommended)
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    
+    # Google AI (Fallback)
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
 
 settings = Settings()

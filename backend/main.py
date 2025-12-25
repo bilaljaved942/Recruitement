@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pathlib import Path
 from .database import init_db
 from .routes import auth, jobs, applications
 # Import models so SQLAlchemy can discover all tables
@@ -26,10 +28,15 @@ app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
 
+# Local storage directory for serving files
+LOCAL_STORAGE_DIR = Path(__file__).parent.parent / "CV_documents"
+
 @app.on_event("startup")
 async def startup():
     """Initialize database on startup."""
     init_db()
+    # Ensure CV_documents directory exists
+    LOCAL_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 @app.get("/")
 async def root():
@@ -44,3 +51,22 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+@app.get("/files/resumes/{filename}")
+async def get_resume_file(filename: str):
+    """Serve locally stored resume files."""
+    file_path = LOCAL_STORAGE_DIR / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Security: prevent path traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type="application/pdf"
+    )
+

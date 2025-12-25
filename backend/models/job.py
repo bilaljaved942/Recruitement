@@ -24,4 +24,4 @@ class Job(Base):
     
     # Relationships
     hr_user = relationship("User", back_populates="jobs")
-    applications = relationship("Application", back_populates="job")
+    applications = relationship("Application", back_populates="job", cascade="all, delete-orphan")

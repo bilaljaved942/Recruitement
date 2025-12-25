@@ -5,8 +5,20 @@ import json
 import fitz
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
+
+# Try to import Groq, fall back to Google if not available
+try:
+    from langchain_groq import ChatGroq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -24,7 +36,23 @@ def get_embed_model():
 def get_llm():
     global _llm
     if _llm is None:
-        _llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
+        # Try Groq first (free tier)
+        groq_key = os.getenv("GROQ_API_KEY", "")
+        google_key = os.getenv("GOOGLE_API_KEY", "")
+        
+        if GROQ_AVAILABLE and groq_key:
+            print("ResumeAnalyzer: Using Groq API (llama-3.3-70b-versatile)")
+            _llm = ChatGroq(
+                model="llama-3.3-70b-versatile",
+                temperature=0,
+                api_key=groq_key
+            )
+        elif GOOGLE_AVAILABLE and google_key:
+            print("ResumeAnalyzer: Using Google Gemini API")
+            _llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0)
+        else:
+            print("ResumeAnalyzer: No LLM API configured! Set GROQ_API_KEY or GOOGLE_API_KEY")
+            _llm = None
     return _llm
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -51,10 +79,17 @@ def extract_text_from_bytes(pdf_bytes: bytes) -> str:
 
 def analyze_resume(resume_text: str, job_description: str) -> dict:
     """
-    Analyze resume against job description using Google Gemini.
+    Analyze resume against job description using Groq or Google Gemini.
     Returns structured JSON with score, summary, and gaps.
     """
     llm = get_llm()
+    
+    if llm is None:
+        return {
+            "score": 0,
+            "summary": "AI analysis unavailable. Please configure GROQ_API_KEY or GOOGLE_API_KEY.",
+            "gaps": ["No API configured"]
+        }
     
     prompt = f"""
     Analyze the following Resume against the Job Description.

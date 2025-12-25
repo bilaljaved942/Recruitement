@@ -171,7 +171,15 @@ async def delete_job(
             detail="Job not found or access denied"
         )
     
-    db.delete(job)
-    db.commit()
-    
-    return {"message": "Job deleted successfully"}
+    try:
+        # Delete the job (applications will be cascade deleted)
+        db.delete(job)
+        db.commit()
+        
+        return {"message": "Job deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete job: {str(e)}"
+        )
